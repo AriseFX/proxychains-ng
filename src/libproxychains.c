@@ -345,23 +345,33 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].ip.is_v6 = !!strchr(host, ':');
 				pd[count].port = htons((unsigned short) port_n);
 				ip_type* host_ip = &pd[count].ip;
-				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
-					if(*ct == STRICT_TYPE && proxychains_resolver >= DNSLF_RDNS_START && count > 0) {
-						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
-						rdns_init(proxychains_resolver);
-						ip_type4 internal_ip = rdns_get_ip_for_host(host, strlen(host));
-						pd[count].ip.is_v6 = 0;
-						host_ip->addr.v4 = internal_ip;
-						if(internal_ip.as_int == IPT4_INVALID.as_int)
-							goto inv_host;
-					} else {
-inv_host:
-						fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
-						fprintf(stderr, "non-numeric ips are only allowed under the following circumstances:\n");
-						fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), rdns_resolver_string(proxychains_resolver));
-						exit(1);
+				pd[count].is_host = 0;
+				do {
+					if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
+						if(*ct == STRICT_TYPE && proxychains_resolver >= DNSLF_RDNS_START && count > 0) {
+							/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
+							rdns_init(proxychains_resolver);
+							ip_type4 internal_ip = rdns_get_ip_for_host(host, strlen(host));
+							pd[count].ip.is_v6 = 0;
+							host_ip->addr.v4 = internal_ip;
+							if(internal_ip.as_int == IPT4_INVALID.as_int)
+								goto inv_host;
+						} else {
+							char ip_address[INET_ADDRSTRLEN];
+							if(0 == get_random_ip_address(host, ip_address)) {
+								//为了让proxychains支持域名类型的代理地址，只能增加一个字段了
+								memcpy(pd[count].host, host, strlen(host) + 1);
+								pd[count].is_host = 1;
+								break;
+							}
+		inv_host:			
+							fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
+							fprintf(stderr, "non-numeric ips are only allowed under the following circumstances:\n");
+							fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), rdns_resolver_string(proxychains_resolver));
+							exit(1);
+						}
 					}
-				}
+				} while(0);
 
 				if(!strcmp(type, "http")) {
 					pd[count].pt = HTTP_TYPE;
@@ -701,6 +711,11 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		errno = ECONNREFUSED;
 		return -1;
 	}
+
+ 	char ip[NI_MAXHOST];
+	
+	inet_ntop(AF_INET, p_addr_in, ip, INET_ADDRSTRLEN);
+	printf("IP地址是：%s\n", ip);
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));

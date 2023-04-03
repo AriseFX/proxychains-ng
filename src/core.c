@@ -431,7 +431,17 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	int v6 = pd->ip.is_v6;
-
+	if(pd->is_host){
+		char ip_address[INET_ADDRSTRLEN];
+		pd->ip.is_v6= v6 = 0;
+		// 查询dns
+		get_random_ip_address(pd->host, ip_address);
+		// pd->ip.addr
+		struct in_addr ip_addr;
+		inet_aton(ip_address, &ip_addr);
+		// 重写目标ip
+		pd->ip.addr.v4.as_int = ip_addr.s_addr;
+	}
 	*fd = socket(v6?PF_INET6:PF_INET, SOCK_STREAM, 0);
 	if(*fd == -1)
 		goto error;
@@ -1028,4 +1038,48 @@ err_nn:
 		p->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
 	}
 	return 0;
+}
+
+int get_random_ip_address(const char *hostname, char *ip_address) {
+    struct addrinfo hints, *res, *p;
+    int status, i, count;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET; // IPv4
+    hints.ai_socktype = SOCK_STREAM;
+
+    status = true_getaddrinfo(hostname, NULL, &hints, &res);
+    if (status != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+        return -1;
+    }
+
+    //统计ip数目
+    count = 0;
+    for (p = res; p != NULL; p = p->ai_next) {
+        if (p->ai_family == AF_INET) { // IPv4
+            count++;
+        }
+    }
+
+    //随机选择ip
+    srand(time(NULL));
+    int index = rand() % count;
+    count = 0;
+    for (p = res; p != NULL; p = p->ai_next) {
+        void *addr;
+        if (p->ai_family == AF_INET) { // IPv4
+            if (count == index) {
+                struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+                addr = &(ipv4->sin_addr);
+                inet_ntop(p->ai_family, addr, ip_address, INET_ADDRSTRLEN);
+                freeaddrinfo(res);
+                return 0;
+            }
+            count++;
+        }
+    }
+
+    freeaddrinfo(res);
+    return -1;
 }

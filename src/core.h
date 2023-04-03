@@ -91,6 +91,8 @@ typedef struct {
 	proxy_state ps;
 	char user[256];
 	char pass[256];
+	char host[1024];
+	char is_host;
 } proxy_data;
 
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
@@ -98,6 +100,7 @@ int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port
 			 unsigned int max_chain );
 
 void proxychains_write_log(char *str, ...);
+int get_random_ip_address(const char *hostname, char *ip_address);
 
 typedef int (*close_t)(int);
 typedef int (*close_range_t)(unsigned, unsigned, int);

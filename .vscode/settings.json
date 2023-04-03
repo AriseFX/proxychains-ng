@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.json": "bat",
+        "limits": "c",
+        "types.h": "c"
+    }
+}
