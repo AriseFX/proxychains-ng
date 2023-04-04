@@ -712,10 +712,6 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		return -1;
 	}
 
- 	char ip[NI_MAXHOST];
-	
-	inet_ntop(AF_INET, p_addr_in, ip, INET_ADDRSTRLEN);
-	printf("IP地址是：%s\n", ip);
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
