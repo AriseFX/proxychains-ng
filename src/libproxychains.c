@@ -132,15 +132,11 @@ static unsigned get_rand_seed(void) {
 #endif
 }
 
-static void do_init(void) {
-	char *env;
+char *white_list;
 
+static void do_init(void) {
 	srand(get_rand_seed());
 	core_initialize();
-
-	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
-	if(env && *env == '1')
-		proxychains_quiet_mode = 1;
 
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
@@ -158,6 +154,10 @@ static void do_init(void) {
 	init_l = 1;
 
 	rdns_init(proxychains_resolver);
+	//环境变量
+	char *env = getenv("MSS_PROXY");
+	white_list = malloc(strlen(env)+1);
+	memcpy(white_list, env, strlen(env)+1);
 }
 
 static void init_lib_wrapper(const char* caller) {
@@ -312,6 +312,10 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	        perror("couldnt read configuration file");
         	exit(1);
 	}
+
+	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
+	if(env && *env == '1')
+		proxychains_quiet_mode = 1;
 
 	while(fgets(buf, sizeof(buf), file)) {
 		buff = buf;
@@ -760,11 +764,39 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		return true_connect(sock, addr, len);
 	}
 
+	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
+
+	char *dst_host_str = NULL;
+ 	char *dst_ip_str = NULL;
+	char hostnamebuf[MSG_LEN_MAX];
+	size_t dns_len = 0;
+
+	if(!dest_ip.is_v6 && proxychains_resolver >= DNSLF_RDNS_START && dest_ip.addr.v4.octet[0] == remote_dns_subnet) {
+		dns_len = rdns_get_host_for_ip(dest_ip.addr.v4, hostnamebuf);
+		if(!dns_len) return ECONNREFUSED;
+		else dst_host_str = hostnamebuf;
+	} else {
+		unsigned char *ip_array = dest_ip.addr.v4.octet;
+	    snprintf(hostnamebuf, sizeof(hostnamebuf), "%d.%d.%d.%d", ip_array[0], ip_array[1], ip_array[2], ip_array[3]);
+		dst_ip_str = hostnamebuf;
+	}
+	//走本地
+	if(!isIPInEnvironment(hostnamebuf)){
+		if(dst_host_str != NULL){
+			//解析
+			char ip_address[INET_ADDRSTRLEN];
+			if(get_random_ip_address(dst_host_str,ip_address) != 0){
+				//本地解析失败
+				return -1;
+			}
+			inet_pton(AF_INET, ip_address, p_addr_in);
+		}
+		return true_connect(sock, addr, len);
+	}
+
 	flags = fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
 		fcntl(sock, F_SETFL, !O_NONBLOCK);
-
-	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
@@ -775,6 +807,25 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 	if(ret != SUCCESS)
 		errno = ECONNREFUSED;
 	return ret;
+}
+
+int isIPInEnvironment(const char* ip) {
+    if (white_list == NULL) {
+        // printf("环境变量IP未设置\n");
+        return 0;
+    }
+    // 使用逗号分割环境变量值
+    char* token = strtok(white_list, ",");
+    while (token != NULL) {
+        // 比较当前的IP值和环境变量中的IP值
+        if (strcmp(token, ip) == 0) {
+            printf("IP %s 存在于环境变量IP中\n", ip);
+            return 1;
+        }
+        token = strtok(NULL, ",");
+    }
+    // printf("IP %s 不存在于环境变量IP中\n", ip);
+    return 0;
 }
 
 #ifdef IS_SOLARIS
