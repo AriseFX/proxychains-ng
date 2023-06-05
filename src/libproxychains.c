@@ -156,8 +156,11 @@ static void do_init(void) {
 	rdns_init(proxychains_resolver);
 	//环境变量
 	char *env = getenv("MSS_PROXY");
-	white_list = malloc(strlen(env)+1);
-	memcpy(white_list, env, strlen(env)+1);
+	if( env!=NULL ){
+		white_list = malloc(strlen(env)+1);
+		memcpy(white_list, env, strlen(env)+1);
+	}
+	
 }
 
 static void init_lib_wrapper(const char* caller) {
@@ -819,7 +822,7 @@ int isIPInEnvironment(const char* ip) {
     while (token != NULL) {
         // 比较当前的IP值和环境变量中的IP值
         if (strcmp(token, ip) == 0) {
-            printf("IP %s 存在于环境变量IP中\n", ip);
+            // printf("IP %s 存在于环境变量IP中\n", ip);
             return 1;
         }
         token = strtok(NULL, ",");
