@@ -156,7 +156,7 @@ static void do_init(void) {
 	rdns_init(proxychains_resolver);
 	//环境变量
 	char *env = getenv("MSS_PROXY");
-	if( env!=NULL ){
+	if(env != NULL){
 		white_list = malloc(strlen(env)+1);
 		memcpy(white_list, env, strlen(env)+1);
 	}
@@ -784,7 +784,7 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		dst_ip_str = hostnamebuf;
 	}
 	//走本地
-	if(!isIPInEnvironment(hostnamebuf)){
+	if(!in_env(hostnamebuf)){
 		if(dst_host_str != NULL){
 			//解析
 			char ip_address[INET_ADDRSTRLEN];
@@ -812,23 +812,20 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 	return ret;
 }
 
-int isIPInEnvironment(const char* ip) {
-    if (white_list == NULL) {
-        // printf("环境变量IP未设置\n");
-        return 0;
-    }
-    // 使用逗号分割环境变量值
-    char* token = strtok(white_list, ",");
+int in_env(const char* host) {
+    char* domainCopy = strdup(white_list);  // 复制域名字符串
+    char* token = strtok(domainCopy, ",");
+    
     while (token != NULL) {
-        // 比较当前的IP值和环境变量中的IP值
-        if (strcmp(token, ip) == 0) {
-            // printf("IP %s 存在于环境变量IP中\n", ip);
-            return 1;
+        if (strcmp(host, token) == 0) {
+            free(domainCopy);
+            return 1;  // 找到匹配的域名
         }
         token = strtok(NULL, ",");
     }
-    // printf("IP %s 不存在于环境变量IP中\n", ip);
-    return 0;
+    
+    free(domainCopy);
+    return 0;  // 没有找到匹配的域名
 }
 
 #ifdef IS_SOLARIS
