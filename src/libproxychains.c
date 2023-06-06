@@ -861,9 +861,11 @@ HOOKFUNC(int, getaddrinfo, const char *node, const char *service, const struct a
 		ret = proxy_getaddrinfo(node, service, hints, res);
 	} else {
 		ret = true_getaddrinfo(node, service, hints, res);
-		char* host_copy = malloc(strlen(node)+1);
-		memcpy(host_copy, node, strlen(node)+1);
-		(*res)->ai_canonname = host_copy;
+		if(ret==0){
+			char* host_copy = malloc(strlen(node)+1);
+			memcpy(host_copy, node, strlen(node)+1);
+			(*res)->ai_canonname = host_copy;
+		}
 	}
 	return ret;
 }
