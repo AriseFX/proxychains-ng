@@ -773,7 +773,7 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
  	char *dst_ip_str = NULL;
 	char hostnamebuf[MSG_LEN_MAX];
 	size_t dns_len = 0;
-
+	size_t a =	at_get_host_for_ip(dest_ip.addr.v4, hostnamebuf);
 	if(!dest_ip.is_v6 && proxychains_resolver >= DNSLF_RDNS_START && dest_ip.addr.v4.octet[0] == remote_dns_subnet) {
 		dns_len = rdns_get_host_for_ip(dest_ip.addr.v4, hostnamebuf);
 		if(!dns_len) return ECONNREFUSED;
@@ -785,18 +785,9 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 	}
 	//走本地
 	if(!in_env(hostnamebuf)){
-		if(dst_host_str != NULL){
-			//解析
-			char ip_address[INET_ADDRSTRLEN];
-			if(get_random_ip_address(dst_host_str,ip_address) != 0){
-				//本地解析失败
-				return -1;
-			}
-			inet_pton(AF_INET, ip_address, p_addr_in);
-		}
 		return true_connect(sock, addr, len);
 	}
-
+	printf("访问[%s]走代理\n",hostnamebuf);
 	flags = fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
 		fcntl(sock, F_SETFL, !O_NONBLOCK);
@@ -810,6 +801,15 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 	if(ret != SUCCESS)
 		errno = ECONNREFUSED;
 	return ret;
+}
+
+void printIPv4Address(struct sockaddr_in* addr) {
+    char ipAddress[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &(addr->sin_addr), ipAddress, INET_ADDRSTRLEN) == NULL) {
+        printf("无法解析IP地址\n");
+    } else {
+        printf("IPv4地址: %s\n", ipAddress);
+    }
 }
 
 int in_env(const char* host) {
@@ -855,21 +855,28 @@ HOOKFUNC(struct hostent*, gethostbyname, const char *name) {
 HOOKFUNC(int, getaddrinfo, const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	INIT();
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
-
-	if(proxychains_resolver != DNSLF_LIBC)
-		return proxy_getaddrinfo(node, service, hints, res);
-	else
-		return true_getaddrinfo(node, service, hints, res);
+	int ret;
+	
+	if(in_env(node)){
+		ret = proxy_getaddrinfo(node, service, hints, res);
+	} else {
+		ret = true_getaddrinfo(node, service, hints, res);
+		char* host_copy = malloc(strlen(node)+1);
+		memcpy(host_copy, node, strlen(node)+1);
+		(*res)->ai_canonname = host_copy;
+	}
+	return ret;
 }
 
 HOOKFUNC(void, freeaddrinfo, struct addrinfo *res) {
 	INIT();
 	PDEBUG("freeaddrinfo %p \n", (void *) res);
-
-	if(proxychains_resolver == DNSLF_LIBC)
-		true_freeaddrinfo(res);
-	else
+	char *node = res->ai_canonname;
+	if(in_env(node)){
 		proxy_freeaddrinfo(res);
+	} else {
+		true_freeaddrinfo(res);
+	}
 }
 
 HOOKFUNC(int, getnameinfo, const struct sockaddr *sa, socklen_t salen,
