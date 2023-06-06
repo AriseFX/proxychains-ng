@@ -1073,13 +1073,13 @@ int get_random_ip_address(const char *hostname, char *ip_address) {
                 struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
                 addr = &(ipv4->sin_addr);
                 inet_ntop(p->ai_family, addr, ip_address, INET_ADDRSTRLEN);
-                freeaddrinfo(res);
+                true_freeaddrinfo(res);
                 return 0;
             }
             count++;
         }
     }
 
-    freeaddrinfo(res);
+    true_freeaddrinfo(res);
     return -1;
 }
