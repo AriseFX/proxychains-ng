@@ -813,6 +813,9 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 }
 
 int in_env(const char* host) {
+	if(white_list==NULL){
+		return 0;
+	}
     char* domainCopy = strdup(white_list);  // 复制域名字符串
     char* token = strtok(domainCopy, ",");
     
